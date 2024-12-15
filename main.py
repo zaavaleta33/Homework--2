@@ -1,185 +1,198 @@
-from fastapi import Depends, FastAPI, HTTPException  
-from pydantic import BaseModel, EmailStr  
+# Importing Depends, FastAPI, and HTTPException from the fastapi package
+from fastapi import Depends, FastAPI, HTTPException
+# Importing BaseModel and EmailStr from pydantic for data validation
+from pydantic import BaseModel, EmailStr
+# Importing List and Optional from typing to allow typing for lists and optional values
 from typing import List, Optional
-from sqlalchemy import create_engine, Column, Integer, String  
-from sqlalchemy.ext.declarative import declarative_base  
-from sqlalchemy.orm import sessionmaker, Session  
+# Importing create_engine, Column, Integer, and String from sqlalchemy for database interaction
+from sqlalchemy import create_engine, Column, Integer, String
+# Importing declarative_base from sqlalchemy.ext.declarative to define the base class for ORM models
+from sqlalchemy.ext.declarative import declarative_base
+# Importing sessionmaker and Session from sqlalchemy.orm for handling database sessions
+from sqlalchemy.orm import sessionmaker, Session
 
-#commands to run the program:
-# uvicorn main:app --reload
-# link to go to  -> http://127.0.0.1:8000/docs
 
-# Database connection URL so that the SQL knows it's me testing it
-DATABASE_URL = "mysql://teset:123456789@localhost/student_management_1"
+# Database connection URL for testing purposes
+database_connection_url = "mysql+pymysql://root:Gecko88707@localhost/book_store"
+#creates an sqlalchemy engine so that I can connec to the database 
+connection_engine = create_engine(database_connection_url, connect_args={"charset": "utf8mb4"})
+#session factory that is used to manage database transaction and interacts with database
+session_factory = sessionmaker(autocommit=False, autoflush=False, bind=connection_engine)
+#creates a base class for my SQLAlchemy models
+BaseModelSQLAlchemy = declarative_base()
 
-#Creates a data field engine
-engine = create_engine(DATABASE_URL, connect_args={"charset": "utf8mb4"})  
-#creates a MYSQLAlchemy session factory using the sessionmaker
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)  
+# SQLAlchemy model representing a book
+class BookModel(BaseModelSQLAlchemy):
+    # Define the table name in the database
+    __tablename__ = "books"
+    # Define the book_id column, set as the primary key and indexed for faster lookups
+    book_id = Column(Integer, primary_key=True, index=True)
+    # Define the book_title column, with a max length of 234 characters and set to NOT NULL
+    book_title = Column(String(234), nullable=False)
+    # Define the book_author column, with a max length of 234 characters and set to NOT NULL
+    book_author = Column(String(234), nullable=False)
+    # Define the book_genre column, with a max length of 111 characters and set to NOT NULL
+    book_genre = Column(String(111), nullable=False)
+    # Define the book_published_year column, set to NOT NULL
+    book_published_year = Column(Integer, nullable=False)
+    # Define the book_isbn column, with a max length of 15 characters, unique to prevent duplicates, and nullable
+    book_isbn = Column(String(15), unique=True, nullable=True)
+    # Define the book_publisher column, with a max length of 234 characters and nullable
+    book_publisher = Column(String(234), nullable=True)
+    # Define the book_page_count column, set to nullable (this means it's optional)
+    book_page_count = Column(Integer, nullable=True)
+    # Define the book_language column, with a max length of 58 characters and nullable
+    book_language = Column(String(58), nullable=True)
+    # Define the book_summary column, with a max length of 555 characters and nullable
+    book_summary = Column(String(555), nullable=True)
+ 
+# Initialize a FastAPI instance
+app = FastAPI()
 
-#creates a database class
-Base = declarative_base()  
-
-#class that defines how the MYSQLAlchemy interactes with the database
-class Book(Base):
-    __tablename__ = "books"  
-    id = Column(Integer, primary_key=True, index=True)  
-    #the title can not be longer than 234 and it can not be null
-    title = Column(String(234), nullable=False)  
-    #the author can not bel onger than 234 and it can not be null
-    author = Column(String(234), nullable=False)
-    # the genre can not be longer than 111 and it can not be null
-    genre = Column(String(111), nullable=False)  
-    #the published_year can not be null and it has to be an int
-    published_year = Column(Integer, nullable=False)
-    #the isbn can not be longer than 15, it has to be unique and it can not be null
-    isbn = Column(String(15), unique=True, nullable=True)  
-    #the publisher can not be longer than 234 and it can be null
-    publisher = Column(String(234), nullable=True)        
-    #the number of pages can be any number and it can be null
-    number_of_pages = Column(Integer, nullable=True)     
-    #the language has to be smaller than 58 and it can be null
-    language = Column(String(58), nullable=True)        
-    #the summary has to be smaller than 55 and it can be null
-    summary = Column(String(555), nullable=True)       
-
-#creates a FastAPI instance
-app = FastAPI()  
-
-#function that creates a database session that then it provides it to route handler
-def get_db():
-    #creates a new database
-    db = SessionLocal()  
-    #alows me to access the database session
+# Dependency to create and provide a database session
+def get_database_session():
+    # Creates a new database session to interact with the database
+    databaseSession = session_factory()
     try:
-        yield db  
-    #no matter what happens, the session will close.
+        # Yields the database session to be used in a context
+        yield databaseSession
     finally:
-        db.close()  
+        #sessions is closed once everything is done
+        databaseSession.close()
 
+# Pydantic model for creating a new book
+class BookCreateSchema(BaseModel):
+    # Title  book 
+    book_title: str
+    # Author of book 
+    book_author: str
+    # Genre of book 
+    book_genre: str
+    # Year the book published 
+    book_published_year: int
+    # ISBN number of book 
+    book_isbn: Optional[str] = None
+    # Publisher of book 
+    book_publisher: Optional[str] = None
+    # Number of pages in book 
+    book_number_of_pages: Optional[int] = None
+    # Language the book is written in 
+    book_language: Optional[str] = None
+    # Summary of the book 
+    book_summary: Optional[str] = None
 
-#it's a dynamic model that is used for validating and serializing input data
-class BookCreate(BaseModel):
-    #defines a field that is a string named title 
-    title: str  
-    #defines a field that is a string named author
-    author: str  
-    #defines a field that is a string named genre
-    genre: str  
-    #defines a field that is an int named published_year
-    published_year: int  
-    #defines a field that is a string named isbn but also it's optional
-    isbn: Optional[str] = None
-    #defines a field that is a string named publisher but also it's optional
-    publisher: Optional[str] = None
-    #defines a field that is an int named number_of_pages but also it's an optional
-    number_of_pages: Optional[int] = None
-    #defines a field that is a string named language but also it's an optional
-    language: Optional[str] = None
-    #defines a field that is a string named summary but also it's an optional
-    summary: Optional[str] = None
+# Pydantic model for outputting book details
+class BookOutputSchema(BookCreateSchema):
+    #Books Identification
+    book_id: int
 
-# a pydantic schema used for output data when returning data infomration 
-class BookOut(BookCreate):
-   
-    #defines a field type id of int's
-    id: int  
-    #used to configure certain behaviors for how Pydantic interactes with the data
     class Config:
-        orm_mode = True  
+        # Allows Pydantic to work with SQLAlchemy models directly
+        orm_mode = True
 
-# creating the database tables for all SQLAlchemy models that are associated with the Base class.
-Base.metadata.create_all(bind=engine)  
+# Create database tables for the models
+BaseModelSQLAlchemy.metadata.create_all(bind=connection_engine)
 
-#Fast rout that defines an HTTP GET endpoint at the URL path book
-@app.get("/books", response_model=List[BookOut])
-# a handler for the HTTP GET request  to the book.
-def get_books(db: Session = Depends(get_db)):
-    #performes a query on the book table in the database that is stored in book and returns it
-    books = db.query(Book).all()  
-    return books  
-#FastAPI route decorator that defines an HTTP GET 
-@app.get("/books/{book_id}", response_model=BookOut)
-#route handler that is for the GET 
-def get_book(book_id: int, db: Session = Depends(get_db)):
-    #get a single book based on the id
-    book = db.query(Book).filter(Book.id == book_id).first()  
-    #if the book is not found then it will throw a "Book not found" error
-    if not book:  
+# Route to retrieve all books
+@app.get("/books", response_model=List[BookOutputSchema])
+def list_books(databaseSession: Session = Depends(get_database_session)):
+    #gets all the books in the database and stores them into book
+    books = databaseSession.query(BookModel).all()
+    #returns all the books in the database
+    return books
+
+# Route to retrieve a specific book by ID
+@app.get("/books/{book_id}", response_model=BookOutputSchema)
+def retrieve_book(book_id: int, databaseSession: Session = Depends(get_database_session)):
+    #finds the first book in the database
+    book = databaseSession.query(BookModel).filter(BookModel.book_id == book_id).first()
+    if not book:
+        #if the book has not been found it will spit out "Book not found"
         raise HTTPException(status_code=404, detail="Book not found")
-    return book  
+    #returns the book it has found
+    return book
 
-#POST route that defines an HTTP GET
-@app.post("/books", response_model=BookOut)
-#route handler that is for POST
-def create_book(book: BookCreate, db: Session = Depends(get_db)):
-    #create a new book record that will be in the Database
-    db_book = Book(
-        title=book.title,  
-        author=book.author,  
-        genre=book.genre,  
-        published_year=book.published_year,  
-        isbn=book.isbn,
-        publisher=book.publisher,
-        number_of_pages=book.number_of_pages,
-        language=book.language,
-        summary=book.summary,
+# Route to add a new book
+@app.post("/books", response_model=BookOutputSchema)
+def add_book(book_data: BookCreateSchema, databaseSession: Session = Depends(get_database_session)):
+    #creates a new book
+    new_book = BookModel(
+        #copies the data into book_title
+        book_title=book_data.book_title,
+        #copies the data into book_author
+        book_author=book_data.book_author,
+        #copies the data into book_genre
+        book_genre=book_data.book_genre,
+        #copies the data into book_published_year
+        book_published_year=book_data.book_published_year,
+        #copies the data into book_isbn
+        book_isbn=book_data.book_isbn,
+        #copies the data into book_published_year
+        book_publisher=book_data.book_publisher,
+        #copies the data into book_number_of_pages
+        book_page_count=book_data.book_number_of_pages,
+        #copies the data into book_language
+        book_language=book_data.book_language,
+        #copies the data into book_summary
+        book_summary=book_data.book_summary,
     )
-    #adds db_book into the database
-    db.add(db_book)  
-    #commits any changes
-    db.commit()  
-    #reload the state of the object
-    db.refresh(db_book)  
-    #returns db_book
-    return db_book  
-#allows the client to update a book that already exists
-@app.put("/books/{book_id}", response_model=BookOut)
-#updates an existing book
-def update_book(book_id: int, updated_book: BookCreate, db: Session = Depends(get_db)):
-    #performes a db query to get a specific book from it's id
-    db_book = db.query(Book).filter(Book.id == book_id).first()  
-    #if the book is not found then it would spit out "Book not found"
-    if not db_book:  
-        raise HTTPException(status_code=404, detail="Book not found")
-    #updates the existing db_book with new title
-    db_book.title = updated_book.title  
-    #updates the existing db_book with new author
-    db_book.author = updated_book.author  
-    #updates the existing db_book with new genre
-    db_book.genre = updated_book.genre  
-    #updates the existing db_book with new published_year
-    db_book.published_year = updated_book.published_year  
-    #updates the existing db_book with new isbn
-    db_book.isbn = updated_book.isbn
-    #updates the existing db_book with new published_year
-    db_book.publisher = updated_book.publisher
-    #updates the existing db_book with new number_of_pages
-    db_book.number_of_pages = updated_book.number_of_pages
-    #updates the existing db_book with new language
-    db_book.language = updated_book.language
-    #updates the existing db_book with new summary
-    db_book.summary = updated_book.summary
-    #commits 
-    db.commit()  
-    #refreshes db_book
-    db.refresh(db_book)  
-    #returns db_book
-    return db_book  
+    #adds the book object to the session
+    databaseSession.add(new_book)
+    #commits the changes
+    databaseSession.commit()
+    #reloads the new_book object from the database 
+    databaseSession.refresh(new_book)
+    #returns new_book
+    return new_book
 
-#Delete route
-@app.delete("/books/{book_id}")
-#function for deleting book
-def delete_book(book_id: int, db: Session = Depends(get_db)):
-    #gets a specific book based on the book's ID
-    db_book = db.query(Book).filter(Book.id == book_id).first()  
-    #if the book is not found then it would spit out "Book not found"
-    if not db_book:  
+# Route to modify an existing book
+@app.put("/books/{book_id}", response_model=BookOutputSchema)
+def modify_book(book_id: int, updated_book_data: BookCreateSchema, databaseSession: Session = Depends(get_database_session)):
+    #checks to see if it exists already
+    book_exists_already = databasesession.query(bookmodel).filter(bookmodel.book_id == book_id).first()
+    #if the book doesn't exists  it will say that the book not found
+    if not book_exists_already:
         raise HTTPException(status_code=404, detail="Book not found")
-    #deletes a specific book in db_book
-    db.delete(db_book)  
-    #commits
-    db.commit()  
+    
+    # Update the book title with the new title from the updated data
+    book_exists_already.book_title = updated_book_data.book_title
+    # Update the book author with the new author from the updated data
+    book_exists_already.book_author = updated_book_data.book_author
+    # Update the book genre with the new genre from the updated data
+    book_exists_already.book_genre = updated_book_data.book_genre
+    # Update the book published year with the new year from the updated data
+    book_exists_already.book_published_year = updated_book_data.book_published_year
+    # Update the book ISBN with the new ISBN from the updated data
+    book_exists_already.book_isbn = updated_book_data.book_isbn
+    # Update the book publisher with the new publisher from the updated data
+    book_exists_already.book_publisher = updated_book_data.book_publisher
+    # Update the book page count with the new page count from the updated data
+    book_exists_already.book_page_count = updated_book_data.book_number_of_pages
+    # Update the book language with the new language from the updated data
+    book_exists_already.book_language = updated_book_data.book_language
+    # Update the book summary with the new summary from the updated data
+    book_exists_already.book_summary = updated_book_data.book_summary
+
+    #commits changes 
+    databaseSession.commit()
+    #refresh
+    databaseSession.refresh(book_exists_already)
+    #returns book_exists_already
+    return book_exists_already
+
+# Route to delete a book
+@app.delete("/books/{book_id}")
+def remove_book(book_id: int, databaseSession: Session = Depends(get_database_session)):
+    #seraches for specific book
+    book_to_delete = databaseSession.query(BookModel).filter(BookModel.book_id == book_id).first()
+    #if the book has not been found it will say "book not found"
+    if not book_to_delete:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    #deletes the book
+    databaseSession.delete(book_to_delete)
+    #commits the changes
+    databaseSession.commit()
     #says that the book has been deleted
-    return {"message": f"Book with ID {book_id} deleted"}  
+    return {"message": f"Book with ID {book_id} has been removed."}
 
